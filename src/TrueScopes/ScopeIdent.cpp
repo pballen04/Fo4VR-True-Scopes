@@ -1356,7 +1356,10 @@ namespace TrueScopes::ScopeIdent
 			return false;
 		}
 		a_weaponFormID = g_info.weaponFormID;
-		std::snprintf(a_matched, sizeof(a_matched), "%s", g_info.fromTable ? g_info.matched : "fallback");
+		// TOML-only scopes need the same nonempty identity as table scopes.
+		const char* key = g_info.matched[0] ? g_info.matched :
+		                  g_info.overrideKey[0] ? g_info.overrideKey : "fallback";
+		std::snprintf(a_matched, sizeof(a_matched), "%s", key);
 		return true;
 	}
 

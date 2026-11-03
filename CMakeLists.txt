@@ -65,6 +65,23 @@ project(
 
 if(TRUESCOPES_BUILD_TESTS)
 	enable_testing()
+	foreach(calibration_test CalibrationMathTests FallbackAnchorTests)
+		add_executable(${calibration_test} tests/${calibration_test}.cpp)
+		target_compile_features(${calibration_test} PRIVATE cxx_std_23)
+		target_include_directories(${calibration_test} PRIVATE src/TrueScopes)
+		target_link_libraries(${calibration_test} PRIVATE nlohmann_json::nlohmann_json)
+		if(MSVC)
+			target_compile_options(${calibration_test} PRIVATE /W4 /WX /EHsc /utf-8)
+		endif()
+		add_test(NAME ${calibration_test} COMMAND ${calibration_test})
+	endforeach()
+	add_executable(StickCalibrationTests tests/StickCalibrationTests.cpp)
+	target_compile_features(StickCalibrationTests PRIVATE cxx_std_23)
+	target_include_directories(StickCalibrationTests PRIVATE integrations/frik/src src/TrueScopes)
+	if(MSVC)
+		target_compile_options(StickCalibrationTests PRIVATE /W4 /WX /EHsc /utf-8)
+	endif()
+	add_test(NAME StickCalibrationTests COMMAND StickCalibrationTests)
 	add_executable(
 		widget_lifecycle_tests
 		tests/WidgetLifecycleTests.cpp
@@ -147,7 +164,9 @@ set(Boost_USE_STATIC_LIBS ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
 
 # ---- Dependencies ----
-if(DEFINED CommonLibPath AND NOT ${CommonLibPath} STREQUAL "" AND IS_DIRECTORY ${CommonLibPath})
+if(TARGET CommonLibF4::CommonLibF4)
+	# Permit a superproject to provide the same dependency target.
+elseif(DEFINED CommonLibPath AND NOT ${CommonLibPath} STREQUAL "" AND IS_DIRECTORY ${CommonLibPath})
 	add_subdirectory(${CommonLibPath} ${CommonLibName})
 else()
 	message(
@@ -157,6 +176,9 @@ else()
 endif()
 
 # ---- Add source files ----
+if(NOT TARGET nlohmann_json::nlohmann_json)
+	find_package(nlohmann_json CONFIG REQUIRED)
+endif()
 include(cmake/headerlist.cmake)
 include(cmake/sourcelist.cmake)
 
@@ -209,6 +231,7 @@ target_link_libraries(
 	${PROJECT_NAME}
 	PRIVATE
 	${CommonLibName}::${CommonLibName}
+	nlohmann_json::nlohmann_json
 )
 
 target_precompile_headers(
