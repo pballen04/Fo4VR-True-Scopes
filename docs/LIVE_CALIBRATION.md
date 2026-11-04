@@ -52,3 +52,19 @@ MO2 config override that retains the user's other TOML settings.
 Headset acceptance is still required for vanilla, modded and piggyback optics,
 save/load, cancel/reset, two-handed/braced motion and coexistence on v0.3.82.
 No live installation was changed by this port.
+
+## Subsequent alignment repair
+
+The engine-authored widget local rotation is now bound to weapon, optic and
+sorted attached-OMOD identity. Ordinary probes and carries keep the same frame;
+a different configuration cannot inherit the first weapon's session baseline.
+Automatic aiming-eye selection also requires a continuous 180ms centered dwell
+and can recover to a clearly better centered eye after the same dwell. This
+avoids a wrong-eye latch taken during a raise remaining stuck for the episode.
+Eyes ahead of the ocular cannot teach a latch. Forced-eye settings remain
+supported. ScopeAlignmentTests reproduces the reported crossover sequence,
+temporary occlusion, render gaps and cross-gun baseline changes.
+
+This follow-up changes neither user profile values nor weapon meshes/camera aim.
+The source and private fit-preserving builds pass eight regression targets;
+the new private backend deployment still needs headset acceptance.

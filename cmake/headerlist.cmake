@@ -14,6 +14,7 @@ set(headers ${headers}
 	src/TrueScopes/OneEuro.h
 	src/TrueScopes/WidgetLifecycle.h
 	src/TrueScopes/WidgetRotation.h
+	src/TrueScopes/AimingEye.h
 	src/TrueScopes/FrikBridge.h
 	src/TrueScopes/Reticle.h
 	src/TrueScopes/ReticleFit.h

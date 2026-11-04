@@ -861,13 +861,12 @@ namespace TrueScopes::ScopeRender
 		// restores whatever the node held at takeover, which is our own tracked
 		// rotation, so a later capture reading the node would learn K from that.
 		// The aimed capture uses this instead.
-		float g_authoredRotRaw[12] = {};
+		WidgetRotation::AuthoredBaseline g_authoredRotation;
 
 		// True while the weapon node hangs somewhere other than where it hung when
 		// it first appeared (its equip hand): a carry, whoever performs it. Written
 		// by the fit's re-parent watch, read by the facing capture.
 		std::atomic_bool g_weaponCarried{ false };
-		bool  g_authoredRotValid = false;
 
 		bool RotationCacheHit()
 		{
@@ -917,6 +916,7 @@ namespace TrueScopes::ScopeRender
 		// L(t0) == L0 exactly and the NIF-authored alignment is preserved.
 		// False = leave the rotation alone (tracking off, no census face, or a
 		// transform read declined); the caller then behaves as before.
+		bool WidgetNodeContainsLastWrite(std::uintptr_t a_sp);
 		[[nodiscard]] bool ComputeTrackedRotation(std::uintptr_t a_sp, float (&a_out)[9])
 		{
 			if (!*Settings::widgetTrackRotation) {
@@ -942,6 +942,28 @@ namespace TrueScopes::ScopeRender
 			float Rp[9];
 			if (!ReadParentTrueRot(a_sp, Rp)) {
 				return false;
+			}
+			std::uint32_t authoredWeapon = 0;
+			char authoredOptic[128]{};
+			const auto identity = ScopeIdent::Get();
+			if (!ScopeIdent::CurrentScopeKey(authoredWeapon, authoredOptic) ||
+				identity.weaponFormID != authoredWeapon || identity.modOverflow || identity.modCount > 24) return false;
+			std::array<std::uint32_t,24> attachedMods{};
+			for (std::uint32_t i=0;i<identity.modCount;++i) attachedMods[i]=identity.mods[i].formID;
+			const auto previousBaseline = g_authoredRotation.Revision();
+			if (!g_authoredRotation.Observe(authoredWeapon, authoredOptic,
+				std::span<const std::uint32_t>(attachedMods.data(),identity.modCount))) return false;
+			if (previousBaseline != g_authoredRotation.Revision()) {
+				// A new identity cannot reuse the previous scope's engine local or K.
+				// Ordinary probes/carries with the same OMOD set keep both intact.
+				if (g_widget.captured && g_widget.wroteRotation && WidgetNodeContainsLastWrite(a_sp)) {
+					std::memcpy(reinterpret_cast<void*>(a_sp+0x30),g_widget.baseRotRaw,sizeof(g_widget.baseRotRaw));
+					g_widget.wroteRotation=false;
+				}
+				g_widget.rotation.Reset(); g_rotCache.valid=false;
+				ResetRotationSettle(); g_rotAdoptTick=::GetTickCount64();
+				logger::info(FMT_STRING("WIDGET ROTATION: authored baseline identity changed to {:08X}, {} ({} mods)"),
+					authoredWeapon,authoredOptic,identity.modCount);
 			}
 			// Aimed: the scope is armed with the eye on the tube (our narrow predicate
 			// when the pose gate is the verdict; the vanilla gate alone otherwise).
@@ -1046,13 +1068,12 @@ namespace TrueScopes::ScopeRender
 					}
 				}
 				const auto* raw = reinterpret_cast<const float*>(a_sp + 0x30);
-				if (!g_authoredRotValid) {
-					// First calibration of the session: the node still holds the
-					// engine's rotation. Keep it for every aimed capture after.
-					std::memcpy(g_authoredRotRaw, raw, sizeof(g_authoredRotRaw));
-					g_authoredRotValid = true;
+				if (!g_authoredRotation.Valid()) {
+					// First calibration of this weapon/optic/OMOD configuration.
+					// A carry/probe keeps it; another gun must capture its own frame.
+					if (!g_authoredRotation.Capture(raw)) return false;
 				}
-				const float* src = aimedNow ? g_authoredRotRaw : raw;
+				const float* src = aimedNow ? g_authoredRotation.Raw() : raw;
 				float        L0[9];
 				for (std::size_t r = 0; r < 3; ++r) {
 					for (std::size_t c = 0; c < 3; ++c) {

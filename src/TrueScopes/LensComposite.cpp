@@ -7,6 +7,7 @@
 #include "TrueScopes/Hooks.h"
 #include "TrueScopes/PoseGate.h"
 #include "TrueScopes/ScopeIdent.h"
+#include "TrueScopes/AimingEye.h"
 #include "TrueScopes/StsLens.h"
 
 namespace TrueScopes::LensComposite
@@ -313,6 +314,9 @@ float4 PSMain(VSOut i) : SV_Target
 		// every frame handed the axis to the other eye whenever the gun swung
 		// across the face, flipping the parallax and the shadow mid-aim. Written
 		// on the render thread, read by the pose gate on the game thread.
+		AimingEye::Selector g_eyeSelector;
+		std::atomic<std::uint64_t> g_eyeResetSerial{0};
+		std::uint64_t g_renderEyeResetSerial = 0;
 		std::atomic<int>           g_eyeSide{ 0 };           // -1 left, +1 right, 0 unlatched
 		std::atomic<std::uint64_t> g_eyeSideEpisode{ ~0ull };  // Hooks::ScopeEpisodeGeneration() the latch belongs to
 
@@ -371,7 +375,7 @@ float4 PSMain(VSOut i) : SV_Target
 				// position - the eye sits behind the ocular, so ly < 0 and
 				// eye relief L = -ly. Parallax scales by D/(L+D).
 				const float ly = rot[4] * v[0] + rot[5] * v[1] + rot[6] * v[2];
-				if (!std::isfinite(lx) || !std::isfinite(lz) || !std::isfinite(ly)) {
+				if (!std::isfinite(lx) || !std::isfinite(lz) || !std::isfinite(ly) || ly >= 0.0f) {
 					continue;
 				}
 				lat[i] = std::sqrt(lx * lx + lz * lz);
@@ -388,30 +392,26 @@ float4 PSMain(VSOut i) : SV_Target
 			if (forced == 1 || forced == 2) {
 				side = forced == 1 ? -1 : 1;
 			} else {
-				// Dominant eye by default. The other eye takes the episode only when
-				// it is clearly the one on the tube: nearer to the axis than the
-				// dominant eye by eyeBoxSwitchMargin, judged once the gate is live and
-				// the eye is within frikLookingLateral of the axis (the render gate
-				// itself goes live 25 units off the tube, where nearer is a coin toss).
-				const int  dominant = *Settings::eyeBoxDominantEye == 1 ? -1 : 1;
-				const auto episode = TrueScopes::Hooks::ScopeEpisodeGeneration();
-				side = g_eyeSide.load(std::memory_order_relaxed);
-				if (side == 0 || g_eyeSideEpisode.load(std::memory_order_relaxed) != episode) {
-					const int   d = dominant > 0 ? 1 : 0, o = 1 - d;
-					const float margin = (std::max)(0.0f, static_cast<float>(*Settings::eyeBoxSwitchMargin));
-					const bool  otherClearly = lat[o] >= 0.0f && (lat[d] < 0.0f || lat[o] + margin < lat[d]);
-					const int   choose = otherClearly ? -dominant : dominant;
-					const float chosenLat = lat[choose > 0 ? 1 : 0];
-					const auto  latchWithin = static_cast<float>(*Settings::frikLookingLateral);
-					if (PoseGate::FillLive() && chosenLat >= 0.0f && (latchWithin <= 0.0f || chosenLat < latchWithin)) {
-						g_eyeSide.store(choose, std::memory_order_relaxed);
-						g_eyeSideEpisode.store(episode, std::memory_order_relaxed);
-						logger::info(FMT_STRING("aiming eye latched for this scope episode: {}{} (lateral left {:.2f} right {:.2f} units, margin {:.1f})"),
-							choose > 0 ? "right"sv : "left"sv, otherClearly ? " - the non-dominant eye, clearly on the tube"sv : ""sv,
-							lat[0], lat[1], margin);
-					}
-					side = choose;
+				const auto resetSerial=g_eyeResetSerial.load(std::memory_order_relaxed);
+				if(resetSerial!=g_renderEyeResetSerial){g_eyeSelector.Reset();g_renderEyeResetSerial=resetSerial;}
+				const int dominant=*Settings::eyeBoxDominantEye==1?-1:1;
+				const auto episode=Hooks::ScopeEpisodeGeneration();
+				const int previous=g_eyeSide.load(std::memory_order_relaxed);
+				float centeredWithin=(std::max)(.1f,static_cast<float>(*Settings::eyeBoxRadiusUnits));
+				const auto looking=static_cast<float>(*Settings::frikLookingLateral);
+				if(looking>0)centeredWithin=(std::min)(centeredWithin,looking);
+				centeredWithin*=.75f;
+				side=g_eyeSelector.Update(episode,::GetTickCount64(),dominant,lat[0],lat[1],
+					PoseGate::FillLive(),centeredWithin,static_cast<float>(*Settings::eyeBoxSwitchMargin));
+				const int committed=g_eyeSelector.Side();
+				g_eyeSide.store(committed,std::memory_order_relaxed);
+				g_eyeSideEpisode.store(episode,std::memory_order_relaxed);
+				if(committed && committed!=previous){
+					g_poseLastMs=0; // do not blend the previous eye's parallax across an IPD
+					logger::info(FMT_STRING("aiming eye {} after {} ms centered dwell: {} (lateral left {:.2f} right {:.2f}, centered <= {:.2f})"),
+						previous?"recovered":"latched",AimingEye::Selector::dwellMs,committed>0?"right":"left",lat[0],lat[1],centeredWithin);
 				}
+
 			}
 			const int i = side > 0 ? 1 : 0;
 			if (lat[i] < 0.0f) {
@@ -735,6 +735,7 @@ float4 PSMain(VSOut i) : SV_Target
 	void ResetAimingEye() noexcept
 	{
 		g_eyeSide.store(0, std::memory_order_relaxed);
+		g_eyeResetSerial.fetch_add(1,std::memory_order_relaxed);
 	}
 
 	int AimingEyeSide() noexcept

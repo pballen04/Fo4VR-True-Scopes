@@ -2,9 +2,52 @@
 
 #include <cstddef>
 #include <cstring>
+#include <cstdint>
+#include <array>
+#include <span>
+#include <algorithm>
+#include <cmath>
 
 namespace TrueScopes::WidgetRotation
 {
+	// The engine's local widget orientation belongs to this weapon/optic/mod
+	// configuration. Keeping one session-global L0 lends the first gun's frame
+	// to a later gun, even though its tracking calibration was correctly reset.
+	class AuthoredBaseline
+	{
+	public:
+		bool Observe(std::uint32_t weapon, const char* optic, std::span<const std::uint32_t> mods) noexcept
+		{
+			if (!weapon || !optic || !optic[0] || mods.size() > mods_.size()) return false;
+			std::size_t length = 0;
+			while (length < sizeof(optic_) && optic[length]) ++length;
+			if (length == sizeof(optic_)) return false;
+			std::array<std::uint32_t, 24> sorted{};
+			std::copy(mods.begin(), mods.end(), sorted.begin());
+			std::sort(sorted.begin(), sorted.begin() + mods.size());
+			if (weapon != weapon_ || std::strcmp(optic_, optic) != 0 || count_ != mods.size() || sorted != mods_) {
+				weapon_ = weapon; std::memcpy(optic_, optic, length + 1);
+				mods_ = sorted; count_ = mods.size(); valid_ = false; ++revision_;
+			}
+			return true;
+		}
+		bool Valid() const noexcept { return valid_; }
+		std::uint64_t Revision() const noexcept { return revision_; }
+		bool Capture(const float* raw) noexcept {
+			for (int c=0;c<3;++c) for(int r=0;r<3;++r) if(!std::isfinite(raw[c*4+r])) return false;
+			std::memcpy(raw_, raw, sizeof(raw_)); valid_ = true; return true;
+		}
+		const float* Raw() const noexcept { return raw_; }
+	private:
+		std::uint32_t weapon_ = 0;
+		char optic_[128]{};
+		std::array<std::uint32_t, 24> mods_{};
+		std::size_t count_ = 0;
+		std::uint64_t revision_ = 0;
+		float raw_[12]{};
+		bool valid_ = false;
+	};
+
 	// Weapon-to-widget rotation calibration. Identity probes refresh which optic
 	// geometry supplies Rw, but they do not replace ScopeParent or its engine
 	// baseline; only a real widget lifecycle reset may discard this calibration.

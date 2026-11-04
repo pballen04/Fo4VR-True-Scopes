@@ -11,9 +11,14 @@ sampling and STS ownership/camera paths. No personal weapon-fitting tables or
 profiles are included. The ABI and storage/threading contract are documented
 in docs/LIVE_CALIBRATION.md.
 
-Validation: isolated Release backend and optional companion builds; seven
+The original engine widget orientation is now keyed to weapon/optic/OMOD
+identity, and automatic eye selection requires a centered dwell and can recover
+from an eye chosen during the raise. These avoid carrying the first gun's local
+frame into another gun and leaving a scope blacked out for the wrong eye.
+
+Validation: isolated Release backend and optional companion builds; eight
 offline tests for lifecycle, rotation, optic classification, reticle fitting,
-calibration frames/epochs, sticks and fallback anchoring. Uses an existing
+calibration frames/epochs, sticks, fallback anchoring and eye/identity recovery. Uses an existing
 matching dependency cache; a clean upstream submodule build is still pending.
 The original older-backend integration was tested in VR; this v0.3.82 port
 still requires its own headset test. Optional UI runtime assets and dependency
