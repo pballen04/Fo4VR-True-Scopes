@@ -18,10 +18,6 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Query(const F4SE::QueryInterface* q
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* l)
 { return g_mod->onF4SEPluginLoad(l); }
 
-// Headless smoke test can verify the constructed runtime identity without F4SE hooks.
-extern "C" DLLEXPORT const char* FO4VRScopeCalibration_ModuleIdentity()
-{ return g_mod ? g_mod->getName().c_str() : "uninitialized"; }
-
 namespace my_mod
 {
     using namespace TrueScopes::Calibration;
@@ -115,10 +111,7 @@ namespace my_mod
         const bool grip=VRControllers.isPressHeldDown(Hand::Offhand,vr::k_EButton_Grip);
         const bool trigger=VRControllers.isPressHeldDown(Hand::Offhand,vr::k_EButton_SteamVR_Trigger);
         const bool tilt=_tiltSelected || grip || trigger;
-        if(tilt!=_lastTilt){
-            logger::info("Scope input: tilt={} selector={} supportGrip={} supportTrigger={}",tilt,_tiltSelected,grip,trigger);
-            _lastTilt=tilt;
-        }
+        _lastTilt = tilt;
         if (_motion.update(_state.values,{support.x,support.y,primary.x,primary.y,tilt},dt,_fine,value)) {
             if(apply(value)) _status="LIVE PREVIEW - press SAVE to keep";
         } else if (!_motion.armed()) _status="Center both sticks to start adjusting";

@@ -38,7 +38,7 @@
             if(_positionButton)_positionButton->setToggleState(!_tiltSelected);
             if(_tiltButton)_tiltButton->setToggleState(_tiltSelected);
         };
-        for(const auto& cells:optics_ui::plan(_help?optics_ui::Page::ScopeHelp:optics_ui::Page::Scope).rows){
+        for (const auto& cells : (_help ? optics_ui::helpRows : optics_ui::scopeRows)) {
             auto row=std::make_shared<UIContainer>("Buttons",UIContainerLayout::HorizontalCenter,optics_ui::rowGap);bool any=false;
             for(auto c:cells){
                 if(c==C::None)continue;any=true;
@@ -56,5 +56,4 @@
             if(any)_panel->addElement(row);
         }
         g_uiManager->attachPresetToPrimaryWandLeft(_panel,{g_config.panelX,g_config.panelY,g_config.panelZ});
-        logger::info("True Scopes near-controller panel page={} rows<=2 buttons<=4",_help?"Help":"Adjust");
     }

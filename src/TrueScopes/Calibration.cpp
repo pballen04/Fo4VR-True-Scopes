@@ -67,10 +67,7 @@ namespace TrueScopes::Calibration
             State fresh{};
             if (!Read(&fresh) || !fresh.ready || fresh.epoch != epoch) return 0;
             const std::scoped_lock guard(lock);
-            const bool accepted = session.set(epoch, *values);
-            if (accepted) logger::info(FMT_STRING("LIVE CALIBRATION epoch {}: right={:.3f} forward={:.3f} up={:.3f} size={:.3f} pitch={:.3f} yaw={:.3f}"),
-                epoch, values->right, values->forward, values->up, values->size, values->pitch, values->yaw);
-            return accepted ? 1u : 0u;
+            return session.set(epoch, *values) ? 1u : 0u;
         }
         const API api{sizeof(API), kVersion, Read, Set};
     }

@@ -82,6 +82,13 @@ if(TRUESCOPES_BUILD_TESTS)
 		target_compile_options(StickCalibrationTests PRIVATE /W4 /WX /EHsc /utf-8)
 	endif()
 	add_test(NAME StickCalibrationTests COMMAND StickCalibrationTests)
+	add_executable(ScopeAlignmentTests tests/ScopeAlignmentTests.cpp)
+	target_compile_features(ScopeAlignmentTests PRIVATE cxx_std_23)
+	target_include_directories(ScopeAlignmentTests PRIVATE src)
+	if(MSVC)
+		target_compile_options(ScopeAlignmentTests PRIVATE /W4 /WX /EHsc /utf-8)
+	endif()
+	add_test(NAME ScopeAlignmentTests COMMAND ScopeAlignmentTests)
 	add_executable(
 		widget_lifecycle_tests
 		tests/WidgetLifecycleTests.cpp
