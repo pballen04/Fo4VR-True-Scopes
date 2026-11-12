@@ -1,20 +1,29 @@
-# Optional FRIK UI companion
+# True Scopes calibration for FRIK
 
-Separate FO4VRScopeCalibration.dll; TrueScopes does not depend on FRIK.
-The live ABI is in ../../src/TrueScopes/CalibrationAPI.h. Save/reset/cancel
-profiles are handled by the companion and keyed using plugin/local form IDs.
-No personal profile JSON is included.
+The optional companion adds a **True Scopes** button to FRIK's in-game
+configuration menu. Install FRIK with its UI assets and a True Scopes build
+that provides the [calibration API](../../docs/LIVE_CALIBRATION.md).
 
-Build this directory independently with the framework's normal vcpkg setup.
-Set `F4VR_COMMON_FRAMEWORK_PATH` to the framework checkout. The original build
-used F4VR-CommonFramework at `3f0bbc8c45c1193b16ca1c09b9f8ba2a97b95890` and
-CommonLibF4VR at `90570520f646e32bfe07bd0cbf9f51bf2aee76b3`.
-The tested FRIK external-menu API header is included under sdk with its parent
-project's GPL-3.0 attribution retained by the repository license.
+## Build and install
 
-This source builds a DLL. It is **not a complete installable UI package** yet:
-the green launcher, controller-relative row/button meshes and textures used
-by the existing private installation need a final provenance/packaging pass.
-Do not distribute a DLL alone as an installable menu. Position/tilt are explicit
-modes; grip/trigger modifiers are not required. Speed, Save, Reset and Cancel
-are distinct controls with neutral-stick/debounce handling.
+Use CMake 4.2 or later, Visual Studio 2022 or later with the C++ desktop
+workload, and a bootstrapped vcpkg checkout. Set `VCPKG_ROOT` to that checkout.
+From the True Scopes repository root, run these commands in PowerShell.
+
+```powershell
+git clone https://github.com/ArthurHub/F4VR-CommonFramework.git ../F4VR-CommonFramework
+git -C ../F4VR-CommonFramework checkout 3f0bbc8c45c1193b16ca1c09b9f8ba2a97b95890
+git -C ../F4VR-CommonFramework submodule update --init --recursive
+
+$framework = (Resolve-Path ../F4VR-CommonFramework).Path
+cmake -S integrations/frik -B build-frik -A x64 "-DF4VR_COMMON_FRAMEWORK_PATH=$framework" -DF4CF_WITH_TRACY=OFF
+cmake --build build-frik --config Release
+cmake --install build-frik --config Release --prefix dist/FO4VRScopeCalibration
+Compress-Archive -Path dist/FO4VRScopeCalibration/* -DestinationPath dist/FO4VRScopeCalibration.zip
+```
+
+Install the ZIP as a separate mod in MO2 alongside True Scopes and FRIK. It
+contains the companion DLL under `F4SE/Plugins` and its menu under `Meshes`
+and `Textures`. Open FRIK's configuration menu and select **True Scopes**.
+
+See [asset credits](ASSET_CREDITS.md) for the shared meshes and atlas sources.
